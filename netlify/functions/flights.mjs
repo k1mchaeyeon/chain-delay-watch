@@ -107,7 +107,8 @@ async function probe(k) {
 }
 
 export default async (req) => {
-  const raw = (process.env.DATA_GO_KR_KEY || '').trim();
+  // 값에 변수 이름이 같이 붙여넣어진 경우를 걸러 낸다.
+  const raw = (process.env.DATA_GO_KR_KEY || '').split('DATA_GO_KR_KEY').join('').replace(/^[=:\s]+|\s+$/g, '');
   if (!raw) return json({ error: 'DATA_GO_KR_KEY 환경 변수가 없습니다.' }, 500);
   const q = new URL(req.url).searchParams;
   const cands = variants(raw);
@@ -116,7 +117,7 @@ export default async (req) => {
     const res = [];
     for (const k of cands) res.push(await probe(k));
     let dec = raw; try { dec = decodeURIComponent(raw); } catch {}
-    return json({ v: 4, raw_length: raw.length, dec_length: dec.length, has_space: /\s/.test(raw), has_percent: raw.includes('%'),
+    return json({ v: 5, raw_length: raw.length, dec_length: dec.length, has_space: /\s/.test(raw), has_percent: raw.includes('%'),
       symbols: [...new Set(dec.replace(/[A-Za-z0-9]/g, ''))].join(' '), raw_symbols: [...new Set(raw.replace(/[A-Za-z0-9]/g, ''))].join(' '),
       starts_ok: dec.startsWith('sbeq4R'), n_candidates: cands.length, variants: res }, 200, { 'cache-control': 'no-store' });
   }
