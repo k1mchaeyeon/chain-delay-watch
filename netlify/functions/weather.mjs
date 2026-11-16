@@ -34,6 +34,8 @@ export default async (req) => {
     const [metars, tafs] = await Promise.all([get('metar?ids=RKSI&format=json&hours=30'), get('taf?ids=RKSI&format=json').catch(() => [])]);
     if (new URL(req.url).searchParams.get('debug') === '1') return json({ metar: metars[0] ?? null, taf: tafs[0] ?? null }, 200, { 'cache-control': 'no-store' });
     const nowSec = Math.floor(Date.now() / 1000), today = kstDay(nowSec);
+    // ?raw=1 은 최근 30시간 관측을 그대로 준다. 매일 수집에 쓴다.
+    if (new URL(req.url).searchParams.get('raw') === '1') return json({ source: 'aviationweather.gov METAR/TAF (RKSI)', at: nowSec, metars, taf: tafs[0] ?? null }, 200, { 'cache-control': 'no-store' });
     const obs = metars.map((m) => {
       const t = Number(m.obsTime) || Math.floor(Date.parse(m.reportTime) / 1000);
       const vis = visM(m.visib);

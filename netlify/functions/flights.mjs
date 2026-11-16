@@ -133,7 +133,8 @@ export default async (req) => {
   if (!good) { for (const k of cands) { if ((await probe(k)).ok) { good = k; break; } } }
   const key = good || cands[0];
   try {
-    const date = today();
+    // ?date=YYYYMMDD 로 지난 날짜(3일 전까지)도 받을 수 있다. 매일 수집에 쓴다.
+    const date = /^\d{8}$/.test(q.get('date') || '') ? q.get('date') : today();
     const [arr, dep] = await Promise.all([all(key, 'arr', date), all(key, 'dep', date)]);
     if (q.get('debug') === '1') {
       // 필드 이름 확인용: 첫 항목만 원문 그대로 보여 준다.

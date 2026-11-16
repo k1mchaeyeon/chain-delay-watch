@@ -1,0 +1,39 @@
+name: 매일 자료 수집
+
+on:
+  schedule:
+    - cron: '20 15 * * *'   # 매일 00:20 (서울)
+  workflow_dispatch:
+    inputs:
+      days_back:
+        description: '며칠 전부터 받을지 (1~3)'
+        default: '1'
+
+permissions:
+  contents: write
+
+concurrency: collect
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: _data
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 받기
+        run: node scripts/collect.mjs _data "${{ github.event.inputs.days_back || '1' }}"
+      - name: 저장
+        if: always()
+        working-directory: _data
+        run: |
+          git config user.name "collector"
+          git config user.email "collector@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "자료 수집 $(TZ=Asia/Seoul date +%F)"
+          git push

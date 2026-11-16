@@ -89,11 +89,11 @@ export default async (req) => {
       return json({ source: '한국공항공사 노선별 소요시간 및 거리 정보', total, routes: items.map((o) => ({ from: pick(o, 'ARP'), to: pick(o, 'ODP'), kind: pick(o, 'TOF'), time_min: Number(pick(o, 'TIME')) || null, km: Number(pick(o, 'KM')) || null })) },
         200, { 'cache-control': 'public, max-age=3600', 'netlify-cdn-cache-control': 'public, s-maxage=86400' });
     }
-    const day = today();
+    const day = /^\d{8}$/.test(q.get('date') || '') ? q.get('date') : today();
     const first = await allPages((p, n) => `${STATUS}/depart?serviceKey=${key}&pageNo=${p}&numOfRows=${n}&searchday=${day}&type=json`);
     const items = first.items;
     if (q.get('debug') === '1') return json({ day, total: first.total, sample: items[0] ?? null, sample2: items[Math.floor(items.length / 2)] ?? null }, 200, { 'cache-control': 'no-store' });
-    const nowMin = Math.round(((Date.now() + 9 * 3600 * 1000) % 86400000) / 60000);
+    const nowMin = day === today() ? Math.round(((Date.now() + 9 * 3600 * 1000) % 86400000) / 60000) : 99999;
     const flights = [];
     for (const o of items) {
       if (/^y/i.test(pick(o, 'codeshare') || '') && pick(o, 'masterflightid') && pick(o, 'masterflightid') !== pick(o, 'flightid')) continue;
