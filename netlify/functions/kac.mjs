@@ -52,6 +52,21 @@ const toMin = (v, day) => {
   return null;
 };
 
+// 한 번에 받을 수 있는 행 수 제한이 문서에 없어서 큰 값부터 줄여 가며 받는다.
+async function allPages(make) {
+  let lastErr;
+  for (const rows of [500, 200, 100]) {
+    try {
+      const first = await call(make(1, rows));
+      let items = first.items;
+      const pages = Math.min(Math.ceil(first.total / rows), 12);
+      if (pages > 1) { const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => call(make(i + 2, rows)))); for (const r of rest) items = items.concat(r.items); }
+      return { items, total: first.total };
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
 export default async (req) => {
   const key = keyParam();
   if (!key) return json({ error: 'DATA_GO_KR_KEY 환경 변수가 없습니다.' }, 500);
@@ -69,16 +84,14 @@ export default async (req) => {
   }
   try {
     if (q.get('what') === 'routes') {
-      const { items, total } = await call(`${ROUTES}/info?serviceKey=${key}&pageNo=1&numOfRows=1000&type=json`);
+      const { items, total } = await allPages((p, n) => `${ROUTES}/info?serviceKey=${key}&pageNo=${p}&numOfRows=${n}&type=json`);
       if (q.get('debug') === '1') return json({ total, sample: items[0] ?? null }, 200, { 'cache-control': 'no-store' });
-      return json({ source: '한국공항공사 노선별 소요시간 및 거리 정보', total, routes: items.map((o) => ({ from: pick(o, 'ARP'), to: pick(o, 'ODP'), kind: pick(o, 'TOF'), time: pick(o, 'TIME'), km: Number(pick(o, 'KM')) || null })) },
+      return json({ source: '한국공항공사 노선별 소요시간 및 거리 정보', total, routes: items.map((o) => ({ from: pick(o, 'ARP'), to: pick(o, 'ODP'), kind: pick(o, 'TOF'), time_min: Number(pick(o, 'TIME')) || null, km: Number(pick(o, 'KM')) || null })) },
         200, { 'cache-control': 'public, max-age=3600', 'netlify-cdn-cache-control': 'public, s-maxage=86400' });
     }
     const day = today();
-    const url = (p) => `${STATUS}/depart?serviceKey=${key}&pageNo=${p}&numOfRows=1000&searchday=${day}&type=json`;
-    const first = await call(url(1));
-    let items = first.items;
-    for (let p = 2; p <= 3 && items.length < first.total; p++) items = items.concat((await call(url(p))).items);
+    const first = await allPages((p, n) => `${STATUS}/depart?serviceKey=${key}&pageNo=${p}&numOfRows=${n}&searchday=${day}&type=json`);
+    const items = first.items;
     if (q.get('debug') === '1') return json({ day, total: first.total, sample: items[0] ?? null, sample2: items[Math.floor(items.length / 2)] ?? null }, 200, { 'cache-control': 'no-store' });
     const nowMin = Math.round(((Date.now() + 9 * 3600 * 1000) % 86400000) / 60000);
     const flights = [];
