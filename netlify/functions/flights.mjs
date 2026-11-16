@@ -3,6 +3,7 @@
 const BASE = 'https://apis.data.go.kr/B551177/statusOfAllFltDeOdp';
 const OPS = { arr: 'getFltArrivalsDeOdp', dep: 'getFltDeparturesDeOdp' };
 const ROWS = 1000;
+const UA = { accept: 'application/json', 'user-agent': 'Mozilla/5.0 (compatible; chain-delay-watch)' };
 const MAX_PAGES = 2;
 
 const json = (body, status = 200, extra = {}) =>
@@ -62,7 +63,7 @@ const norm = (o, dir) => {
 async function page(key, dir, date, pageNo) {
   const qs = new URLSearchParams({ pageNo: String(pageNo), numOfRows: String(ROWS), searchDate: date, searchFrom: '0000', searchTo: '2400', passengerOrCargo: 'P', type: 'json' });
   const u = `${BASE}/${OPS[dir]}?serviceKey=${key}&${qs}`;
-  const r = await fetch(u, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(9000) });
+  const r = await fetch(u, { headers: UA, signal: AbortSignal.timeout(9000) });
   const text = await r.text();
   let data;
   try { data = JSON.parse(text); } catch {
@@ -100,7 +101,7 @@ const variants = (raw) => {
 let good = null; // 통한 방식(인코딩된 키 조각)을 기억해 둔다.
 async function probe(k) {
   try {
-    const r = await fetch(`${BASE}/${OPS.dep}?serviceKey=${k}&pageNo=1&numOfRows=1&type=json`, { signal: AbortSignal.timeout(8000) });
+    const r = await fetch(`${BASE}/${OPS.dep}?serviceKey=${k}&pageNo=1&numOfRows=1&type=json`, { headers: UA, signal: AbortSignal.timeout(8000) });
     const t = await r.text();
     return { status: r.status, ok: r.ok && !/SERVICE_KEY|returnAuthMsg/.test(t), code: (t.match(/"returnReasonCode"\s*:\s*"(\d+)"/) || t.match(/<returnReasonCode>(\d+)</) || [])[1] || null };
   } catch (e) { return { status: 0, ok: false, code: String(e.message || e) }; }
@@ -116,10 +117,18 @@ export default async (req) => {
     // 키 값은 싣지 않고 모양과 방식별 결과만 본다.
     const res = [];
     for (const k of cands) res.push(await probe(k));
+    // 호출 환경에 따라 달라지는지 보는 진단 (키는 싣지 않는다)
+    const k0 = cands[0], today8 = today(), env = {};
+    const tryUrl = async (name, url, headers) => { try { const r = await fetch(url, { headers, signal: AbortSignal.timeout(8000) }); const t = await r.text(); env[name] = r.status + ' ' + t.slice(0, 160).split(k0).join('***'); } catch (e) { env[name] = 'ERR ' + String(e.message || e); } };
+    await tryUrl('noUA', `${BASE}/${OPS.dep}?serviceKey=${k0}&pageNo=1&numOfRows=1&type=json`, {});
+    await tryUrl('http', `http://apis.data.go.kr/B551177/statusOfAllFltDeOdp/${OPS.dep}?serviceKey=${k0}&pageNo=1&numOfRows=1&type=json`, UA);
+    await tryUrl('withDate', `${BASE}/${OPS.dep}?serviceKey=${k0}&pageNo=1&numOfRows=1&searchDate=${today8}&type=json`, UA);
+    await tryUrl('xml', `${BASE}/${OPS.dep}?serviceKey=${k0}&pageNo=1&numOfRows=1`, UA);
+    await tryUrl('arr', `${BASE}/${OPS.arr}?serviceKey=${k0}&pageNo=1&numOfRows=1&type=json`, UA);
     let dec = raw; try { dec = decodeURIComponent(raw); } catch {}
-    return json({ v: 5, raw_length: raw.length, dec_length: dec.length, has_space: /\s/.test(raw), has_percent: raw.includes('%'),
+    return json({ v: 6, raw_length: raw.length, dec_length: dec.length, has_space: /\s/.test(raw), has_percent: raw.includes('%'),
       symbols: [...new Set(dec.replace(/[A-Za-z0-9]/g, ''))].join(' '), raw_symbols: [...new Set(raw.replace(/[A-Za-z0-9]/g, ''))].join(' '),
-      starts_ok: dec.startsWith('sbeq4R'), n_candidates: cands.length, variants: res }, 200, { 'cache-control': 'no-store' });
+      n_candidates: cands.length, variants: res, env }, 200, { 'cache-control': 'no-store' });
   }
   if (!good) { for (const k of cands) { if ((await probe(k)).ok) { good = k; break; } } }
   const key = good || cands[0];
