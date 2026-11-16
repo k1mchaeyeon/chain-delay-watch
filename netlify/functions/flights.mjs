@@ -115,7 +115,10 @@ export default async (req) => {
     // 키 값은 싣지 않고 모양과 방식별 결과만 본다.
     const res = [];
     for (const k of cands) res.push(await probe(k));
-    return json({ raw_length: raw.length, has_space: /\s/.test(raw), has_percent: raw.includes('%'), variants: res }, 200, { 'cache-control': 'no-store' });
+    let dec = raw; try { dec = decodeURIComponent(raw); } catch {}
+    return json({ v: 4, raw_length: raw.length, dec_length: dec.length, has_space: /\s/.test(raw), has_percent: raw.includes('%'),
+      symbols: [...new Set(dec.replace(/[A-Za-z0-9]/g, ''))].join(' '), raw_symbols: [...new Set(raw.replace(/[A-Za-z0-9]/g, ''))].join(' '),
+      starts_ok: dec.startsWith('sbeq4R'), n_candidates: cands.length, variants: res }, 200, { 'cache-control': 'no-store' });
   }
   if (!good) { for (const k of cands) { if ((await probe(k)).ok) { good = k; break; } } }
   const key = good || cands[0];
