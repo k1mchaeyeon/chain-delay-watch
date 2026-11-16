@@ -92,9 +92,10 @@ async function all(key, dir, date) {
 
 // 키를 주소에 싣는 방식 후보. 포털 키는 형식에 따라 통하는 방식이 달라서 차례로 시험한다.
 const variants = (raw) => {
+  // 여러 번 인코딩된 채 저장된 경우까지 끝까지 풀어서 원래 키를 얻는다.
   let dec = raw;
-  try { dec = decodeURIComponent(raw); } catch {}
-  return [...new Set([raw, encodeURIComponent(raw), encodeURIComponent(dec)])];
+  for (let i = 0; i < 4 && /%[0-9A-Fa-f]{2}/.test(dec); i++) { try { dec = decodeURIComponent(dec); } catch { break; } }
+  return [...new Set([encodeURIComponent(dec), raw, encodeURIComponent(raw)])];
 };
 let good = null; // 통한 방식(인코딩된 키 조각)을 기억해 둔다.
 async function probe(k) {
