@@ -99,6 +99,23 @@ export default async (req) => {
   const key = process.env.DATA_GO_KR_KEY;
   if (!key) return json({ error: 'DATA_GO_KR_KEY 환경 변수가 없습니다.' }, 500);
   const q = new URL(req.url).searchParams;
+  if (q.get('debug') === '2') {
+    // 응답 구조 확인용: 조건을 바꿔 가며 원문 앞부분만 본다 (키는 응답에 없다).
+    const out = {};
+    for (const [name, extra] of Object.entries({
+      full: { searchDate: today(), searchFrom: '0000', searchTo: '2400', passengerOrCargo: 'P' },
+      dateOnly: { searchDate: today() },
+      bare: {},
+    })) {
+      const u = new URL(`${BASE}/${OPS.dep}`);
+      for (const [k, v] of Object.entries({ serviceKey: key, pageNo: '1', numOfRows: '2', type: 'json', ...extra })) u.searchParams.set(k, v);
+      try {
+        const r = await fetch(u, { signal: AbortSignal.timeout(9000) });
+        out[name] = { status: r.status, text: (await r.text()).slice(0, 1500).split(key).join('***') };
+      } catch (e) { out[name] = { error: String(e.message || e) }; }
+    }
+    return json(out, 200, { 'cache-control': 'no-store' });
+  }
   try {
     const date = today();
     const [arr, dep] = await Promise.all([all(key, 'arr', date), all(key, 'dep', date)]);
