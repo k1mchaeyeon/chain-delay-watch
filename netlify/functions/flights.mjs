@@ -60,15 +60,8 @@ const norm = (o, dir) => {
 };
 
 async function page(key, dir, date, pageNo) {
-  const u = new URL(`${BASE}/${OPS[dir]}`);
-  u.searchParams.set('serviceKey', key);
-  u.searchParams.set('pageNo', String(pageNo));
-  u.searchParams.set('numOfRows', String(ROWS));
-  u.searchParams.set('searchDate', date);
-  u.searchParams.set('searchFrom', '0000');
-  u.searchParams.set('searchTo', '2400');
-  u.searchParams.set('passengerOrCargo', 'P');
-  u.searchParams.set('type', 'json');
+  const qs = new URLSearchParams({ pageNo: String(pageNo), numOfRows: String(ROWS), searchDate: date, searchFrom: '0000', searchTo: '2400', passengerOrCargo: 'P', type: 'json' });
+  const u = `${BASE}/${OPS[dir]}?serviceKey=${key}&${qs}`;
   const r = await fetch(u, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(9000) });
   const text = await r.text();
   let data;
@@ -97,35 +90,34 @@ async function all(key, dir, date) {
   return { items, total: first.total };
 }
 
+// 키를 주소에 싣는 방식 후보. 포털 키는 형식에 따라 통하는 방식이 달라서 차례로 시험한다.
+const variants = (raw) => {
+  let dec = raw;
+  try { dec = decodeURIComponent(raw); } catch {}
+  return [...new Set([raw, encodeURIComponent(raw), encodeURIComponent(dec)])];
+};
+let good = null; // 통한 방식(인코딩된 키 조각)을 기억해 둔다.
+async function probe(k) {
+  try {
+    const r = await fetch(`${BASE}/${OPS.dep}?serviceKey=${k}&pageNo=1&numOfRows=1&type=json`, { signal: AbortSignal.timeout(8000) });
+    const t = await r.text();
+    return { status: r.status, ok: r.ok && !/SERVICE_KEY|returnAuthMsg/.test(t), code: (t.match(/"returnReasonCode"\s*:\s*"(\d+)"/) || t.match(/<returnReasonCode>(\d+)</) || [])[1] || null };
+  } catch (e) { return { status: 0, ok: false, code: String(e.message || e) }; }
+}
+
 export default async (req) => {
-  let key = (process.env.DATA_GO_KR_KEY || '').trim();
-  // Encoding 키를 넣었어도 동작하도록 한 번 풀어 준다.
-  if (/%[0-9A-Fa-f]{2}/.test(key)) { try { key = decodeURIComponent(key); } catch {} }
-  if (!key) return json({ error: 'DATA_GO_KR_KEY 환경 변수가 없습니다.' }, 500);
+  const raw = (process.env.DATA_GO_KR_KEY || '').trim();
+  if (!raw) return json({ error: 'DATA_GO_KR_KEY 환경 변수가 없습니다.' }, 500);
   const q = new URL(req.url).searchParams;
+  const cands = variants(raw);
   if (q.get('debug') === '3') {
-    // 키 값은 싣지 않고 모양만 본다.
-    const raw = process.env.DATA_GO_KR_KEY || '';
-    return json({ raw_length: raw.length, used_length: key.length, has_space: /\s/.test(raw), has_percent: raw.includes('%'), ends_with_eq: key.endsWith('='),
-      base64_only: /^[A-Za-z0-9+/=]+$/.test(key), hex_only: /^[0-9a-f]+$/i.test(key), has_quote: /["']/.test(raw) }, 200, { 'cache-control': 'no-store' });
+    // 키 값은 싣지 않고 모양과 방식별 결과만 본다.
+    const res = [];
+    for (const k of cands) res.push(await probe(k));
+    return json({ raw_length: raw.length, has_space: /\s/.test(raw), has_percent: raw.includes('%'), variants: res }, 200, { 'cache-control': 'no-store' });
   }
-  if (q.get('debug') === '2') {
-    // 응답 구조 확인용: 조건을 바꿔 가며 원문 앞부분만 본다 (키는 응답에 없다).
-    const out = {};
-    for (const [name, extra] of Object.entries({
-      full: { searchDate: today(), searchFrom: '0000', searchTo: '2400', passengerOrCargo: 'P' },
-      dateOnly: { searchDate: today() },
-      bare: {},
-    })) {
-      const u = new URL(`${BASE}/${OPS.dep}`);
-      for (const [k, v] of Object.entries({ serviceKey: key, pageNo: '1', numOfRows: '2', type: 'json', ...extra })) u.searchParams.set(k, v);
-      try {
-        const r = await fetch(u, { signal: AbortSignal.timeout(9000) });
-        out[name] = { status: r.status, text: (await r.text()).slice(0, 1500).split(key).join('***') };
-      } catch (e) { out[name] = { error: String(e.message || e) }; }
-    }
-    return json(out, 200, { 'cache-control': 'no-store' });
-  }
+  if (!good) { for (const k of cands) { if ((await probe(k)).ok) { good = k; break; } } }
+  const key = good || cands[0];
   try {
     const date = today();
     const [arr, dep] = await Promise.all([all(key, 'arr', date), all(key, 'dep', date)]);
