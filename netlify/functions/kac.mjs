@@ -57,6 +57,16 @@ export default async (req) => {
   if (!key) return json({ error: 'DATA_GO_KR_KEY 환경 변수가 없습니다.' }, 500);
   const q = new URL(req.url).searchParams;
   const cache = { 'cache-control': 'public, max-age=300', 'netlify-cdn-cache-control': 'public, s-maxage=900' };
+  if (q.get('debug') === '2') {
+    const out = {};
+    const tries = { small: `${STATUS}/depart?serviceKey=${key}&pageNo=1&numOfRows=5&type=json`, day: `${STATUS}/depart?serviceKey=${key}&pageNo=1&numOfRows=5&searchday=${today()}&type=json`,
+      gmp: `${STATUS}/depart?serviceKey=${key}&pageNo=1&numOfRows=5&searchday=${today()}&airport_code=GMP&type=json`, xml: `${STATUS}/depart?serviceKey=${key}&pageNo=1&numOfRows=5`,
+      info: `${STATUS}/info?serviceKey=${key}&pageNo=1&numOfRows=5&type=json`, detail: `${STATUS}/detail?serviceKey=${key}&pageNo=1&numOfRows=5&type=json`, routes: `${ROUTES}/info?serviceKey=${key}&pageNo=1&numOfRows=5&type=json` };
+    for (const [n, u] of Object.entries(tries)) {
+      try { const r = await fetch(u, { signal: AbortSignal.timeout(8000) }); out[n] = { status: r.status, text: (await r.text()).slice(0, 700).split(key).join('***') }; } catch (e) { out[n] = { error: String(e.message || e) }; }
+    }
+    return json(out, 200, { 'cache-control': 'no-store' });
+  }
   try {
     if (q.get('what') === 'routes') {
       const { items, total } = await call(`${ROUTES}/info?serviceKey=${key}&pageNo=1&numOfRows=1000&type=json`);
