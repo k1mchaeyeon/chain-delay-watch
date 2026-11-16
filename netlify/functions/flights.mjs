@@ -103,6 +103,12 @@ export default async (req) => {
   if (/%[0-9A-Fa-f]{2}/.test(key)) { try { key = decodeURIComponent(key); } catch {} }
   if (!key) return json({ error: 'DATA_GO_KR_KEY 환경 변수가 없습니다.' }, 500);
   const q = new URL(req.url).searchParams;
+  if (q.get('debug') === '3') {
+    // 키 값은 싣지 않고 모양만 본다.
+    const raw = process.env.DATA_GO_KR_KEY || '';
+    return json({ raw_length: raw.length, used_length: key.length, has_space: /\s/.test(raw), has_percent: raw.includes('%'), ends_with_eq: key.endsWith('='),
+      base64_only: /^[A-Za-z0-9+/=]+$/.test(key), hex_only: /^[0-9a-f]+$/i.test(key), has_quote: /["']/.test(raw) }, 200, { 'cache-control': 'no-store' });
+  }
   if (q.get('debug') === '2') {
     // 응답 구조 확인용: 조건을 바꿔 가며 원문 앞부분만 본다 (키는 응답에 없다).
     const out = {};
