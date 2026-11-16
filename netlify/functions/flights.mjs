@@ -77,6 +77,8 @@ async function page(key, dir, date, pageNo) {
     const m = text.match(/<returnAuthMsg>([^<]+)</) || text.match(/<resultMsg>([^<]+)</) || text.match(/<errMsg>([^<]+)</);
     throw new Error(`${dir} ${r.status} ${m ? m[1] : '응답 형식 오류'}`);
   }
+  const gw = data?.OpenAPI_ServiceResponse?.cmmMsgHeader;
+  if (gw) throw new Error(`${dir} ${gw.returnReasonCode || r.status} ${gw.returnAuthMsg || gw.errMsg || ''}`);
   const head = data?.response?.header || {};
   if (head.resultCode && head.resultCode !== '00') throw new Error(`${dir} ${head.resultCode} ${head.resultMsg || ''}`);
   const body = data?.response?.body || {};
@@ -96,7 +98,9 @@ async function all(key, dir, date) {
 }
 
 export default async (req) => {
-  const key = process.env.DATA_GO_KR_KEY;
+  let key = (process.env.DATA_GO_KR_KEY || '').trim();
+  // Encoding 키를 넣었어도 동작하도록 한 번 풀어 준다.
+  if (/%[0-9A-Fa-f]{2}/.test(key)) { try { key = decodeURIComponent(key); } catch {} }
   if (!key) return json({ error: 'DATA_GO_KR_KEY 환경 변수가 없습니다.' }, 500);
   const q = new URL(req.url).searchParams;
   if (q.get('debug') === '2') {
