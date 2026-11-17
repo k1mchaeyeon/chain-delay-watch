@@ -146,7 +146,10 @@ export default async (req) => {
       { source: '인천국제공항공사 항공기 운항 현황 상세 조회', date, at: Math.floor(Date.now() / 1000), totals: { arr: arr.total, dep: dep.total }, flights },
       200,
       // 개발 계정은 하루 500회라서 15분 동안 CDN 에 보관한다 (하루 최대 약 400회).
-      { 'cache-control': 'public, max-age=300', 'netlify-cdn-cache-control': 'public, s-maxage=900' },
+      // 지난 날짜는 거의 바뀌지 않으므로 6시간 보관한다 (분석 탭이 지난 3일을 함께 부른다).
+      date < today()
+        ? { 'cache-control': 'public, max-age=3600', 'netlify-cdn-cache-control': 'public, s-maxage=21600' }
+        : { 'cache-control': 'public, max-age=300', 'netlify-cdn-cache-control': 'public, s-maxage=900' },
     );
   } catch (e) {
     return json({ error: String(e.message || e) }, 502, { 'cache-control': 'no-store' });
