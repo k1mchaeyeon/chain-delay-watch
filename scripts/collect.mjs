@@ -39,9 +39,11 @@ for (let d = back; d >= 1; d--) {
     if (j && j.flights?.length) await save('kac_departures', `${day}.json`, j); else { failed++; console.error(`한국공항공사 운항 ${day} 받지 못함`); }
   }
 }
-// 날씨는 최근 30시간 관측만 받을 수 있어서 실행한 날 기준으로 저장한다 (어제 하루가 들어 있다).
+// 날씨는 최근 30시간 관측만 받을 수 있다. 예약 실행이 몇 시간씩 늦어져도 빈 시간이 없도록
+// 하루 두 번 받아 실행 시각 이름으로 따로 저장한다 (겹치는 관측은 학습 전에 시각으로 중복 제거).
 const w = await get(`${BASE}/api/weather?raw=1`);
-if (w && w.metars?.length) await save('icn_weather', `${dayStr(1)}.json`, w); else { failed++; console.error('날씨 받지 못함'); }
+const stamp = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 13).replace('T', '_') + '시';
+if (w && w.metars?.length) await save('icn_weather', `${stamp}.json`, w); else { failed++; console.error('날씨 받지 못함'); }
 if (!(await exists(path.join(out, 'kac_routes.json')))) {
   const r = await get(`${BASE}/api/kac?what=routes`);
   if (r && r.routes?.length) { await writeFile(path.join(out, 'kac_routes.json'), JSON.stringify(r)); console.log('저장: kac_routes.json'); }

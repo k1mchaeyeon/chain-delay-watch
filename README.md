@@ -32,6 +32,6 @@
 
 ## 매일 자료 수집 (모델 학습용)
 
-- `.github/workflows/collect.yml` 이 매일 00:20(서울)에 `scripts/collect.mjs` 를 돌려 전날 자료를 `data` 브랜치에 쌓는다.
-- `icn_flights/날짜.json` 인천공항 출발·도착 전체, `kac_departures/날짜.json` 한국공항공사 14개 공항 출발, `icn_weather/날짜.json` 인천공항 METAR 최근 30시간, `kac_routes.json` 노선별 거리·소요시간.
+- `.github/workflows/collect.yml` 이 매일 00:20과 12:20(서울)에 `scripts/collect.mjs` 를 돌려 전날 자료를 `data` 브랜치에 쌓는다.
+- `icn_flights/날짜.json` 인천공항 출발·도착 전체, `kac_departures/날짜.json` 한국공항공사 14개 공항 출발, `icn_weather/날짜_시.json` 인천공항 METAR 최근 30시간(하루 두 번, 겹침 있음), `kac_routes.json` 노선별 거리·소요시간.
 - 인천공항 API 는 3일 전까지만 조회되므로 하루라도 빠지면 Actions 탭에서 수동 실행(days_back 최대 3)으로 메운다.

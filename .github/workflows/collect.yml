@@ -3,6 +3,7 @@ name: 매일 자료 수집
 on:
   schedule:
     - cron: '20 15 * * *'   # 매일 00:20 (서울)
+    - cron: '20 3 * * *'    # 매일 12:20 (서울), 날씨가 비지 않게 한 번 더
   workflow_dispatch:
     inputs:
       days_back:
