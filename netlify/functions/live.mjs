@@ -12,11 +12,20 @@ const country = (reg) => {
 export default async () => {
   try {
     const now = Math.floor(Date.now() / 1000);
-    const results = await Promise.all(POINTS.map(async ([lat, lon]) => {
-      const r = await fetch(`https://api.adsb.lol/v2/point/${lat}/${lon}/250`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
-      if (!r.ok) throw new Error('adsb.lol ' + r.status);
-      return (await r.json()).ac || [];
-    }));
+    // 공개 ADS-B 서버가 가끔 느리거나 막혀서 같은 형식의 세 곳에 동시에 묻고 가장 먼저 온 답을 쓴다.
+    const SOURCES = [
+      ['adsb.lol', (lat, lon) => `https://api.adsb.lol/v2/point/${lat}/${lon}/250`],
+      ['airplanes.live', (lat, lon) => `https://api.airplanes.live/v2/point/${lat}/${lon}/250`],
+      ['adsb.fi', (lat, lon) => `https://opendata.adsb.fi/api/v2/lat/${lat}/lon/${lon}/dist/250`],
+    ];
+    const used = new Set();
+    const results = await Promise.all(POINTS.map(([lat, lon]) => Promise.any(SOURCES.map(async ([name, url]) => {
+      const r = await fetch(url(lat, lon), { headers: { accept: 'application/json', 'user-agent': 'chain-delay-watch-dashboard' }, signal: AbortSignal.timeout(9000) });
+      if (!r.ok) throw new Error(name + ' ' + r.status);
+      const j = await r.json(); const ac = j.ac || j.aircraft;
+      if (!Array.isArray(ac) || !ac.length) throw new Error(name + ' 빈 응답');
+      used.add(name); return ac;
+    }))));
     const seen = new Map();
     for (const a of results.flat()) {
       if (a.lat == null || a.lon == null || seen.has(a.hex)) continue;
@@ -28,11 +37,11 @@ export default async () => {
         vrate: typeof a.baro_rate === 'number' ? a.baro_rate / 196.85 : null, last: now - Math.round(a.seen || 0),
       });
     }
-    return new Response(JSON.stringify({ source: 'adsb.lol', at: now, ac: [...seen.values()] }), {
-      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=20' },
+    return new Response(JSON.stringify({ source: [...used].join(' · '), at: now, ac: [...seen.values()] }), {
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=20', 'netlify-cdn-cache-control': 'public, s-maxage=20, stale-while-revalidate=600' },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 502, headers: { 'content-type': 'application/json; charset=utf-8' } });
+    return new Response(JSON.stringify({ error: e instanceof AggregateError ? e.errors.map((x) => String(x.message || x)).join(' / ') : String(e.message || e) }), { status: 502, headers: { 'content-type': 'application/json; charset=utf-8' } });
   }
 };
 export const config = { path: '/api/live' };
